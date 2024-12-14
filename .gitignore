@@ -1,0 +1,5 @@
+.venv/
+music/
+split/
+baseline.pth
+*__pycache__/
