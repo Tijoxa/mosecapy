@@ -26,5 +26,5 @@ loguru==0.7.0
 
 ## Setup
 - Download model, and put the weight file in project root.
-- Create `music` folder and put flac/mp3 files in there.
+- Create `music` folder and put flac/m4a/mp3 files in there.
 - Run `uv run mosecapy.py` and it should work.

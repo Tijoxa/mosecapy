@@ -39,18 +39,33 @@ def transform(input):
     )
 
     sound1 = AudioSegment.from_file(
-        os.path.join(args["output_dir"], args["model"], args["input"].split("/")[-1].replace(".flac", ""), "vocals.mp3"), format="mp3"
+        os.path.join(
+            args["output_dir"],
+            args["model"],
+            args["input"].split("/")[-1].replace(".flac", "").replace(".m4a", ""),
+            "vocals.mp3",
+        ),
+        format="mp3",
     )
     sound2 = AudioSegment.from_file(
-        os.path.join(args["output_dir"], args["model"], args["input"].split("/")[-1].replace(".flac", ""), "bass.mp3"), format="mp3"
+        os.path.join(
+            args["output_dir"], args["model"], args["input"].split("/")[-1].replace(".flac", "").replace(".m4a", ""), "bass.mp3"
+        ),
+        format="mp3",
     )
     sound3 = AudioSegment.from_file(
-        os.path.join(args["output_dir"], args["model"], args["input"].split("/")[-1].replace(".flac", ""), "other.mp3"), format="mp3"
+        os.path.join(
+            args["output_dir"], args["model"], args["input"].split("/")[-1].replace(".flac", "").replace(".m4a", ""), "other.mp3"
+        ),
+        format="mp3",
     )
 
     overlay = sound1.overlay(sound2, position=0).overlay(sound3, position=0)
     _file_handle = overlay.export(
-        os.path.join(args["output_dir"], args["input"].split("/")[-1].replace(".flac", "") + "_drumless.mp3"), format="mp3"
+        os.path.join(
+            args["output_dir"], args["input"].split("/")[-1].replace(".flac", "").replace(".m4a", "") + "_drumless.mp3"
+        ),
+        format="mp3",
     )
 
 
