@@ -7,7 +7,7 @@
 
 ## Installation
 ```Bash
-uv tool install https://github.com/Tijoxa/mosecapy.git
+uv tool install https://github.com/Tijoxa/mosecapy.git --python=3.9
 ```
 
 ## Setup
