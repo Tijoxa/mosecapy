@@ -1,24 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "mosecapy"
-version = "0.1.0"
+dynamic = ["version"]
 description = "use of moseca"
 readme = "README.md"
 requires-python = ">=3.9,<3.10"
 dependencies = [
-    "demucs==4.0.0",
-    "pandas==1.5.3",
-    "pydub==0.25.1",
-    "pytube==12.1.3",
-    "streamlit-player==0.1.5",
-    "streamlit==1.22.*",
-    "yt-dlp==2023.7.6",
-    "matplotlib==3.7.1",
-    "librosa==0.10.0.post2",
-    "resampy==0.4.2",
-    "stqdm==0.0.5",
-    "streamlit-option-menu==0.3.6",
-    "htbuilder==0.6.1",
-    "loguru==0.7.0",
-    "numpy<2",
-    "setuptools>=75.6.0",
+  "click>=8.1.7",
+  "demucs==4.0.0",
+  "librosa==0.10.0.post2",
+  "numpy<2",
+  "pydub==0.25.1",
 ]
+
+[project.scripts]
+mosecapy = "mosecapy:cli"
+
+[tool.hatch.version]
+path = "src/mosecapy/__init__.py"
+
+[tool.ruff]
+line-length = 140
+select = ["ALL"]

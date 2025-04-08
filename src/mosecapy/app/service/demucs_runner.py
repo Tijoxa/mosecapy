@@ -1,20 +1,17 @@
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import List
-import os
-from dora.log import fatal
+
 import torch as th
-
-from demucs.apply import apply_model, BagOfModels
+from demucs.apply import BagOfModels, apply_model
 from demucs.audio import save_audio
-from demucs.pretrained import get_model_from_args, ModelLoadingError
+from demucs.pretrained import ModelLoadingError, get_model_from_args
 from demucs.separate import load_track
+from dora.log import fatal
 
-import streamlit as st
 
-
-@st.cache_data(show_spinner=False)
 def separator(
     tracks: List[Path],
     out: Path,
@@ -97,10 +94,7 @@ def separator(
         fatal('".." must not appear in filename. ')
 
     if isinstance(model, BagOfModels):
-        print(
-            f"Selected model is a bag of {len(model.models)} models. "
-            "You will see that many progress bars per track."
-        )
+        print(f"Selected model is a bag of {len(model.models)} models. You will see that many progress bars per track.")
         if args.segment is not None:
             for sub in model.models:
                 sub.segment = args.segment

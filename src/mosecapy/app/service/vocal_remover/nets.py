@@ -1,12 +1,14 @@
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
-from app.service.vocal_remover import layers
+from . import layers
 
 
 class BaseNet(nn.Module):
-    def __init__(self, nin, nout, nin_lstm, nout_lstm, dilations=((4, 2), (8, 4), (12, 6))):
+    def __init__(
+        self, nin, nout, nin_lstm, nout_lstm, dilations=((4, 2), (8, 4), (12, 6))
+    ):
         super(BaseNet, self).__init__()
         self.enc1 = layers.Conv2DBNActiv(nin, nout, 3, 1, 1)
         self.enc2 = layers.Encoder(nout, nout * 2, 3, 2, 1)
@@ -52,7 +54,9 @@ class CascadedNet(nn.Module):
             BaseNet(2, nout // 2, self.nin_lstm // 2, nout_lstm),
             layers.Conv2DBNActiv(nout // 2, nout // 4, 1, 1, 0),
         )
-        self.stg1_high_band_net = BaseNet(2, nout // 4, self.nin_lstm // 2, nout_lstm // 2)
+        self.stg1_high_band_net = BaseNet(
+            2, nout // 4, self.nin_lstm // 2, nout_lstm // 2
+        )
 
         self.stg2_low_band_net = nn.Sequential(
             BaseNet(nout // 4 + 2, nout, self.nin_lstm // 2, nout_lstm),
@@ -62,7 +66,9 @@ class CascadedNet(nn.Module):
             nout // 4 + 2, nout // 2, self.nin_lstm // 2, nout_lstm // 2
         )
 
-        self.stg3_full_band_net = BaseNet(3 * nout // 4 + 2, nout, self.nin_lstm, nout_lstm)
+        self.stg3_full_band_net = BaseNet(
+            3 * nout // 4 + 2, nout, self.nin_lstm, nout_lstm
+        )
 
         self.out = nn.Conv2d(nout, 2, 1, bias=False)
         self.aux_out = nn.Conv2d(3 * nout // 4, 2, 1, bias=False)

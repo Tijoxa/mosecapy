@@ -1,15 +1,14 @@
-import os
 import logging
+import os
+
 import librosa
 import numpy as np
 import soundfile as sf
 import torch
-from stqdm import stqdm
-import streamlit as st
 from pydub import AudioSegment
+from stqdm import stqdm
 
-from app.service.vocal_remover import nets
-
+from . import nets
 
 if os.environ.get("LIMIT_CPU", False):
     torch.set_num_threads(1)
@@ -159,7 +158,6 @@ class Separator(object):
         return y_spec, v_spec
 
 
-@st.cache_resource(show_spinner=False)
 def load_model(pretrained_model, n_fft=2048):
     model = nets.CascadedNet(n_fft, 32, 128)
     if torch.cuda.is_available():
