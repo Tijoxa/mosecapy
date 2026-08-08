@@ -13,11 +13,14 @@ dependencies = [
   "demucs==4.0.0",
   "librosa==0.10.0.post2",
   "numpy<2",
+  "onnx>=1.19.1",
+  "onnxscript>=0.7.1",
   "pydub==0.25.1",
 ]
 
 [project.scripts]
 mosecapy = "mosecapy:cli"
+export = "mosecapy.export_model:main"
 
 [tool.uv]
 constraint-dependencies = ["lameenc==1.8.1"]
@@ -27,4 +30,3 @@ path = "src/mosecapy/__init__.py"
 
 [tool.ruff]
 line-length = 140
-select = ["ALL"]
