@@ -19,6 +19,9 @@ dependencies = [
 [project.scripts]
 mosecapy = "mosecapy:cli"
 
+[tool.uv]
+constraint-dependencies = ["lameenc==1.8.1"]
+
 [tool.hatch.version]
 path = "src/mosecapy/__init__.py"
 
