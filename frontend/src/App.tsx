@@ -12,7 +12,6 @@ import {
 } from "./audio";
 import { MODEL_CACHE_NAME, MODEL_URL } from "./model";
 import { cacheYouTubeAudio, clearCachedYouTubeAudio, loadCachedYouTubeAudio } from "./input-cache";
-import { isAndroidUserAgent, isYouTubeUrl, NEWPIPE_RELEASES_URL } from "./newpipe";
 import { STEMS, type WorkerBackend, type WorkerRequest, type WorkerResponse } from "./types";
 
 type Phase = "idle" | "decoding" | "separating" | "complete" | "error";
@@ -27,10 +26,23 @@ const YT_DLP_REPOSITORY_URL = "https://github.com/yt-dlp/yt-dlp";
 const ACCEPTED_TYPES = ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/flac", "audio/ogg"];
 const STEM_COLORS = ["#f15b35", "#8f75e8", "#2b8f73", "#d08c22"];
 const ALL_STEM_INDICES = STEMS.map((_, index) => index);
+const MOBILE_MEDIA_QUERY = "(max-width: 660px)";
+
+function useMobileViewport(): boolean {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_MEDIA_QUERY).matches);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
+    const updateViewport = () => setIsMobile(mediaQuery.matches);
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
+
+  return isMobile;
+}
 
 function App() {
-  const isAndroid = isAndroidUserAgent(navigator.userAgent);
-  const canShareYouTubeUrl = isAndroid && typeof navigator.share === "function";
+  const isMobileViewport = useMobileViewport();
   const [file, setFile] = useState<File | null>(null);
   const [sourceMode, setSourceMode] = useState<SourceMode>("local");
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -101,6 +113,11 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (isMobileViewport && sourceMode === "youtube") setSourceMode("local");
+  }, [isMobileViewport, sourceMode]);
+
+  useEffect(() => {
+    if (isMobileViewport) return;
     let mounted = true;
 
     async function restoreYouTubeInput() {
@@ -120,7 +137,7 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isMobileViewport]);
 
   function getWorker(): Worker {
     if (workerRef.current) return workerRef.current;
@@ -208,27 +225,6 @@ function App() {
       setMessage("Choose a track to begin");
     } finally {
       setIsYoutubeImporting(false);
-    }
-  }
-
-  async function shareYouTubeUrl() {
-    const sourceUrl = youtubeUrl.trim();
-    if (!sourceUrl || isBusy || isYoutubeImporting || isExporting) return;
-    if (!isYouTubeUrl(sourceUrl)) {
-      setYoutubeError("Enter a valid YouTube URL.");
-      return;
-    }
-    if (!canShareYouTubeUrl) {
-      setYoutubeError("This browser cannot open Android's share menu. Paste the URL directly into NewPipe.");
-      return;
-    }
-
-    setYoutubeError(null);
-    try {
-      await navigator.share({ title: "Open in NewPipe", url: sourceUrl });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      setYoutubeError("The Android share menu could not be opened.");
     }
   }
 
@@ -540,20 +536,22 @@ function App() {
           >
             <span><strong>Local file</strong><small>Choose audio from this device</small></span>
           </button>
-          <button
-            className={sourceMode === "youtube" ? "active" : ""}
-            type="button"
-            role="tab"
-            aria-selected={sourceMode === "youtube"}
-            aria-controls="youtube-source"
-            onClick={() => chooseSource("youtube")}
-            disabled={isBusy || isYoutubeImporting || isExporting}
-          >
-            <span><strong>YouTube audio</strong><small>Paste a video or music URL</small></span>
-          </button>
+          {!isMobileViewport && (
+            <button
+              className={sourceMode === "youtube" ? "active" : ""}
+              type="button"
+              role="tab"
+              aria-selected={sourceMode === "youtube"}
+              aria-controls="youtube-source"
+              onClick={() => chooseSource("youtube")}
+              disabled={isBusy || isYoutubeImporting || isExporting}
+            >
+              <span><strong>YouTube audio</strong><small>Paste a video or music URL</small></span>
+            </button>
+          )}
         </div>
 
-        {sourceMode === "local" ? (
+        {sourceMode === "local" || isMobileViewport ? (
             <div
               id="local-source"
               role="tabpanel"
@@ -592,15 +590,12 @@ function App() {
                   <strong>{file ? file.name : "Import from YouTube"}</strong>
                   <span>{file
                     ? `${(file.size / 1024 / 1024).toFixed(1)} MB · ready to separate`
-                    : isAndroid
-                      ? "Choose NewPipe from Android's share sheet, then save M4A audio"
-                      : "Audio is converted to MP3, then processed locally"}</span>
+                    : "Audio is converted to MP3, then processed locally"}</span>
                 </div>
               </div>
               <form onSubmit={(event) => {
                 event.preventDefault();
-                if (isAndroid) void shareYouTubeUrl();
-                else void importYouTubeAudio();
+                void importYouTubeAudio();
               }}>
                 <label htmlFor="youtube-url">YouTube URL</label>
                 <div>
@@ -615,7 +610,7 @@ function App() {
                     required
                   />
                   <button type="submit" disabled={!youtubeUrl.trim() || isYoutubeImporting || isBusy || isExporting}>
-                    {isAndroid ? "Share to NewPipe" : isYoutubeImporting ? "Importing…" : file ? "Replace audio" : "Import audio"}
+                    {isYoutubeImporting ? "Importing…" : file ? "Replace audio" : "Import audio"}
                   </button>
                 </div>
                 <p className={`youtube-feedback ${youtubeError ? "error" : ""}`} role={youtubeError ? "alert" : undefined} aria-live="polite">
@@ -626,12 +621,7 @@ function App() {
                         Install here.
                       </a>
                     </>
-                  ) : youtubeError || (isAndroid && (
-                    <>
-                      In NewPipe choose Download → Always, then return and import the M4A under Local file.{' '}
-                      <a href={NEWPIPE_RELEASES_URL} target="_blank" rel="noreferrer">Get NewPipe.</a>
-                    </>
-                  ))}
+                  ) : youtubeError}
                 </p>
               </form>
             </div>
