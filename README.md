@@ -49,8 +49,6 @@ bun run start
 
 `bun run dev` exposes the same YouTube endpoint through the Vite development server, so the source works in both development and the built Bun server.
 
-On Android, the YouTube button instead opens the system share sheet with the entered URL; choose [NewPipe](https://github.com/TeamNewPipe/NewPipe) as the destination. This avoids browser-specific `intent://` handling. On the first handoff, choose **Download → Always** in NewPipe, save M4A audio, return to Mosecapy, and select the download under **Local file**. The UI links to NewPipe's official GitHub releases if it is not installed.
-
-The GitHub Pages deployment remains static. Desktop and iOS YouTube importing therefore requires the Bun server (or an equivalent deployment of `/api/youtube-audio`); Android can use the NewPipe handoff and import its downloaded M4A locally. Only download media you have permission to use.
+The GitHub Pages deployment remains static, so YouTube importing requires the Bun server (or an equivalent deployment of `/api/youtube-audio`). The YouTube source is hidden on mobile layouts; mobile users can select local audio files. Only download media you have permission to use.
 
 The `export` command writes `public/models/htdemucs.onnx` and automatically corrects PyTorch's `ScatterND` index type for ONNX Runtime Web.
