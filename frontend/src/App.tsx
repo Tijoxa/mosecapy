@@ -11,20 +11,31 @@ import {
   type OutputFormat,
 } from "./audio";
 import { MODEL_CACHE_NAME, MODEL_URL } from "./model";
+import { cacheYouTubeAudio, clearCachedYouTubeAudio, loadCachedYouTubeAudio } from "./input-cache";
+import { isAndroidUserAgent, isYouTubeUrl, NEWPIPE_RELEASES_URL } from "./newpipe";
 import { STEMS, type WorkerBackend, type WorkerRequest, type WorkerResponse } from "./types";
 
 type Phase = "idle" | "decoding" | "separating" | "complete" | "error";
 type ModelState = "idle" | "loading" | "ready" | "error";
 type PreviewState = "idle" | "playing" | "paused";
+type SourceMode = "local" | "youtube";
 
 const MAX_FILE_SIZE = 250 * 1024 * 1024;
 const SAMPLE_RATE = 44_100;
+const YT_DLP_INSTALL_ERROR = "yt-dlp is not installed or YT_DLP_PATH is not configured.";
+const YT_DLP_REPOSITORY_URL = "https://github.com/yt-dlp/yt-dlp";
 const ACCEPTED_TYPES = ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/flac", "audio/ogg"];
 const STEM_COLORS = ["#f15b35", "#8f75e8", "#2b8f73", "#d08c22"];
 const ALL_STEM_INDICES = STEMS.map((_, index) => index);
 
 function App() {
+  const isAndroid = isAndroidUserAgent(navigator.userAgent);
+  const canShareYouTubeUrl = isAndroid && typeof navigator.share === "function";
   const [file, setFile] = useState<File | null>(null);
+  const [sourceMode, setSourceMode] = useState<SourceMode>("local");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [isYoutubeImporting, setIsYoutubeImporting] = useState(false);
+  const [youtubeError, setYoutubeError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -89,6 +100,28 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+
+    async function restoreYouTubeInput() {
+      try {
+        const cached = await loadCachedYouTubeAudio();
+        if (!mounted || !cached) return;
+        setSourceMode("youtube");
+        setYoutubeUrl(cached.url);
+        setFile(cached.file);
+        setMessage("Ready to separate");
+      } catch {
+        // IndexedDB may be unavailable in private browsing; imports still work for the current page lifecycle.
+      }
+    }
+
+    void restoreYouTubeInput();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   function getWorker(): Worker {
     if (workerRef.current) return workerRef.current;
 
@@ -114,7 +147,7 @@ function App() {
     getWorker().postMessage({ type: "load-model", modelUrl: MODEL_URL } satisfies WorkerRequest);
   }
 
-  function chooseFile(nextFile?: File) {
+  function chooseFile(nextFile?: File, source: SourceMode = "local") {
     if (!nextFile) return;
     const hasAudioExtension = /\.(mp3|wav|m4a|flac|ogg)$/i.test(nextFile.name);
     if (!nextFile.type.startsWith("audio/") && !ACCEPTED_TYPES.includes(nextFile.type) && !hasAudioExtension) {
@@ -126,9 +159,77 @@ function App() {
       return;
     }
     resetResults();
+    if (source === "local") void clearCachedYouTubeAudio().catch(() => undefined);
     setFile(nextFile);
     setPhase("idle");
     setMessage("Ready to separate");
+  }
+
+  function chooseSource(nextSource: SourceMode) {
+    if (nextSource === sourceMode || isBusy || isYoutubeImporting || isExporting) return;
+    resetResults();
+    setFile(null);
+    setPhase("idle");
+    setMessage("Choose a track to begin");
+    setYoutubeError(null);
+    setSourceMode(nextSource);
+    if (nextSource === "local") void clearCachedYouTubeAudio().catch(() => undefined);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  async function importYouTubeAudio() {
+    const sourceUrl = youtubeUrl.trim();
+    if (!sourceUrl || isYoutubeImporting || isBusy || isExporting) return;
+
+    setIsYoutubeImporting(true);
+    setYoutubeError(null);
+    setMessage("Importing audio from YouTube…");
+
+    try {
+      const response = await fetch("/api/youtube-audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: sourceUrl }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error || "YouTube audio could not be imported.");
+      }
+
+      const blob = await response.blob();
+      const encodedFilename = response.headers.get("X-Track-Filename");
+      const filename = encodedFilename ? decodeURIComponent(encodedFilename) : "youtube-audio.mp3";
+      const importedFile = new File([blob], filename, { type: response.headers.get("Content-Type") || "audio/mpeg" });
+      await cacheYouTubeAudio(importedFile, sourceUrl).catch(() => undefined);
+      chooseFile(importedFile, "youtube");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "YouTube audio could not be imported.";
+      setYoutubeError(errorMessage);
+      setMessage("Choose a track to begin");
+    } finally {
+      setIsYoutubeImporting(false);
+    }
+  }
+
+  async function shareYouTubeUrl() {
+    const sourceUrl = youtubeUrl.trim();
+    if (!sourceUrl || isBusy || isYoutubeImporting || isExporting) return;
+    if (!isYouTubeUrl(sourceUrl)) {
+      setYoutubeError("Enter a valid YouTube URL.");
+      return;
+    }
+    if (!canShareYouTubeUrl) {
+      setYoutubeError("This browser cannot open Android's share menu. Paste the URL directly into NewPipe.");
+      return;
+    }
+
+    setYoutubeError(null);
+    try {
+      await navigator.share({ title: "Open in NewPipe", url: sourceUrl });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setYoutubeError("The Android share menu could not be opened.");
+    }
   }
 
   async function startSeparation() {
@@ -424,34 +525,117 @@ function App() {
       </header>
 
       <section className="hero" id="top">
-        <div
-          className={`drop-zone ${isDragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
-          onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setIsDragging(false);
-            chooseFile(event.dataTransfer.files[0]);
-          }}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg"
-            onChange={(event) => chooseFile(event.target.files?.[0])}
-            hidden
-          />
-          <div className="drop-copy">
-            <div className="file-icon" aria-hidden="true">♪</div>
-            <div>
-              <strong>{file ? file.name : "Drop a track here"}</strong>
-              <span>{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "MP3, WAV, M4A, FLAC or OGG · up to 250 MB"}</span>
-            </div>
-          </div>
-          <button className="browse-button" type="button" onClick={() => inputRef.current?.click()} disabled={isBusy || isExporting}>
-            {file ? "Change track" : "Browse files"}
+        <div className="source-heading">
+          <span>01 / SELECT INPUT</span>
+        </div>
+        <div className="source-picker" role="tablist" aria-label="Audio source">
+          <button
+            className={sourceMode === "local" ? "active" : ""}
+            type="button"
+            role="tab"
+            aria-selected={sourceMode === "local"}
+            aria-controls="local-source"
+            onClick={() => chooseSource("local")}
+            disabled={isBusy || isYoutubeImporting || isExporting}
+          >
+            <span><strong>Local file</strong><small>Choose audio from this device</small></span>
+          </button>
+          <button
+            className={sourceMode === "youtube" ? "active" : ""}
+            type="button"
+            role="tab"
+            aria-selected={sourceMode === "youtube"}
+            aria-controls="youtube-source"
+            onClick={() => chooseSource("youtube")}
+            disabled={isBusy || isYoutubeImporting || isExporting}
+          >
+            <span><strong>YouTube audio</strong><small>Paste a video or music URL</small></span>
           </button>
         </div>
+
+        {sourceMode === "local" ? (
+            <div
+              id="local-source"
+              role="tabpanel"
+              className={`drop-zone ${isDragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
+              onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setIsDragging(false);
+                chooseFile(event.dataTransfer.files[0]);
+              }}
+            >
+              <input
+                ref={inputRef}
+                type="file"
+                accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg"
+                onChange={(event) => chooseFile(event.target.files?.[0])}
+                hidden
+              />
+              <div className="drop-copy">
+                <div className="file-icon" aria-hidden="true">♪</div>
+                <div>
+                  <strong>{file ? file.name : "Drop a track here"}</strong>
+                  <span>{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "MP3, WAV, M4A, FLAC or OGG · up to 250 MB"}</span>
+                </div>
+              </div>
+              <button className="browse-button" type="button" onClick={() => inputRef.current?.click()} disabled={isBusy || isExporting}>
+                {file ? "Change track" : "Browse files"}
+              </button>
+            </div>
+        ) : (
+            <div id="youtube-source" role="tabpanel" className={`youtube-panel ${file ? "has-file" : ""}`}>
+              <div className="youtube-copy">
+                <div className="youtube-icon" aria-hidden="true">▶</div>
+                <div>
+                  <strong>{file ? file.name : "Import from YouTube"}</strong>
+                  <span>{file
+                    ? `${(file.size / 1024 / 1024).toFixed(1)} MB · ready to separate`
+                    : isAndroid
+                      ? "Choose NewPipe from Android's share sheet, then save M4A audio"
+                      : "Audio is converted to MP3, then processed locally"}</span>
+                </div>
+              </div>
+              <form onSubmit={(event) => {
+                event.preventDefault();
+                if (isAndroid) void shareYouTubeUrl();
+                else void importYouTubeAudio();
+              }}>
+                <label htmlFor="youtube-url">YouTube URL</label>
+                <div>
+                  <input
+                    id="youtube-url"
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://youtube.com/watch?v=…"
+                    value={youtubeUrl}
+                    onChange={(event) => setYoutubeUrl(event.target.value)}
+                    disabled={isYoutubeImporting || isBusy || isExporting}
+                    required
+                  />
+                  <button type="submit" disabled={!youtubeUrl.trim() || isYoutubeImporting || isBusy || isExporting}>
+                    {isAndroid ? "Share to NewPipe" : isYoutubeImporting ? "Importing…" : file ? "Replace audio" : "Import audio"}
+                  </button>
+                </div>
+                <p className={`youtube-feedback ${youtubeError ? "error" : ""}`} role={youtubeError ? "alert" : undefined} aria-live="polite">
+                  {youtubeError === YT_DLP_INSTALL_ERROR ? (
+                    <>
+                      {youtubeError}{' '}
+                      <a href={YT_DLP_REPOSITORY_URL} target="_blank" rel="noreferrer">
+                        Install here.
+                      </a>
+                    </>
+                  ) : youtubeError || (isAndroid && (
+                    <>
+                      In NewPipe choose Download → Always, then return and import the M4A under Local file.{' '}
+                      <a href={NEWPIPE_RELEASES_URL} target="_blank" rel="noreferrer">Get NewPipe.</a>
+                    </>
+                  ))}
+                </p>
+              </form>
+            </div>
+        )}
 
         <div className="action-row">
           <button
