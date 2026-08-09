@@ -12,6 +12,7 @@ import {
 } from "./audio";
 import { MODEL_CACHE_NAME, MODEL_URL } from "./model";
 import { cacheYouTubeAudio, clearCachedYouTubeAudio, loadCachedYouTubeAudio } from "./input-cache";
+import { isAndroidUserAgent, isYouTubeUrl, NEWPIPE_RELEASES_URL } from "./newpipe";
 import { STEMS, type WorkerBackend, type WorkerRequest, type WorkerResponse } from "./types";
 
 type Phase = "idle" | "decoding" | "separating" | "complete" | "error";
@@ -28,6 +29,8 @@ const STEM_COLORS = ["#f15b35", "#8f75e8", "#2b8f73", "#d08c22"];
 const ALL_STEM_INDICES = STEMS.map((_, index) => index);
 
 function App() {
+  const isAndroid = isAndroidUserAgent(navigator.userAgent);
+  const canShareYouTubeUrl = isAndroid && typeof navigator.share === "function";
   const [file, setFile] = useState<File | null>(null);
   const [sourceMode, setSourceMode] = useState<SourceMode>("local");
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -205,6 +208,27 @@ function App() {
       setMessage("Choose a track to begin");
     } finally {
       setIsYoutubeImporting(false);
+    }
+  }
+
+  async function shareYouTubeUrl() {
+    const sourceUrl = youtubeUrl.trim();
+    if (!sourceUrl || isBusy || isYoutubeImporting || isExporting) return;
+    if (!isYouTubeUrl(sourceUrl)) {
+      setYoutubeError("Enter a valid YouTube URL.");
+      return;
+    }
+    if (!canShareYouTubeUrl) {
+      setYoutubeError("This browser cannot open Android's share menu. Paste the URL directly into NewPipe.");
+      return;
+    }
+
+    setYoutubeError(null);
+    try {
+      await navigator.share({ title: "Open in NewPipe", url: sourceUrl });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setYoutubeError("The Android share menu could not be opened.");
     }
   }
 
@@ -566,10 +590,18 @@ function App() {
                 <div className="youtube-icon" aria-hidden="true">▶</div>
                 <div>
                   <strong>{file ? file.name : "Import from YouTube"}</strong>
-                  <span>{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB · ready to separate` : "Audio is converted to MP3, then processed locally"}</span>
+                  <span>{file
+                    ? `${(file.size / 1024 / 1024).toFixed(1)} MB · ready to separate`
+                    : isAndroid
+                      ? "Choose NewPipe from Android's share sheet, then save M4A audio"
+                      : "Audio is converted to MP3, then processed locally"}</span>
                 </div>
               </div>
-              <form onSubmit={(event) => { event.preventDefault(); void importYouTubeAudio(); }}>
+              <form onSubmit={(event) => {
+                event.preventDefault();
+                if (isAndroid) void shareYouTubeUrl();
+                else void importYouTubeAudio();
+              }}>
                 <label htmlFor="youtube-url">YouTube URL</label>
                 <div>
                   <input
@@ -583,7 +615,7 @@ function App() {
                     required
                   />
                   <button type="submit" disabled={!youtubeUrl.trim() || isYoutubeImporting || isBusy || isExporting}>
-                    {isYoutubeImporting ? "Importing…" : file ? "Replace audio" : "Import audio"}
+                    {isAndroid ? "Share to NewPipe" : isYoutubeImporting ? "Importing…" : file ? "Replace audio" : "Import audio"}
                   </button>
                 </div>
                 <p className={`youtube-feedback ${youtubeError ? "error" : ""}`} role={youtubeError ? "alert" : undefined} aria-live="polite">
@@ -594,9 +626,12 @@ function App() {
                         Install here.
                       </a>
                     </>
-                  ) : (
-                    youtubeError
-                  )}
+                  ) : youtubeError || (isAndroid && (
+                    <>
+                      In NewPipe choose Download → Always, then return and import the M4A under Local file.{' '}
+                      <a href={NEWPIPE_RELEASES_URL} target="_blank" rel="noreferrer">Get NewPipe.</a>
+                    </>
+                  ))}
                 </p>
               </form>
             </div>
