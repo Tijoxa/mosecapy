@@ -85,6 +85,8 @@ main { overflow: hidden; }
 .youtube-feedback { height: 2.8em; line-height: 1.4; margin: 1px 0 0; overflow: auto; overflow-wrap: anywhere; }
 .youtube-feedback.error, .youtube-feedback.error a { color: #b52f23; }
 .youtube-feedback.error a:hover { color: var(--orange); }
+.youtube-feedback:not(.error) a { color: inherit; }
+.youtube-feedback a:hover { color: var(--orange); }
 .browse-button, .model-button, .separate-button { border: 0; cursor: pointer; transition: .18s ease; z-index: 1; }
 .browse-button { background: var(--ink); color: var(--paper); padding: 14px 20px; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .browse-button:hover { background: var(--orange); }
