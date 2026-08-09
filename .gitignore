@@ -3,3 +3,10 @@ music/
 split/
 baseline.pth
 *__pycache__/
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+*node_modules/
+*dist/
+*.onnx
+*.DS_STORE
