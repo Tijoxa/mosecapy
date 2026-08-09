@@ -31,4 +31,24 @@ bun run dev
 
 Create a production build with `bun run build`. The static output is written to `frontend/dist` and needs no application server.
 
+### YouTube audio input
+
+The source chooser also accepts YouTube URLs. That route uses `yt-dlp` with the
+[`yt-dlp/ejs`](https://github.com/yt-dlp/ejs) challenge solver (`ejs:npm`) and Bun as its JavaScript runtime, then gives the converted MP3 to the same browser-based separation flow.
+
+Install current `yt-dlp` and `ffmpeg`, build the frontend, and run the Bun server:
+
+```bash
+cd frontend
+bun install
+bun run build
+bun run start
+```
+
+`yt-dlp` must be on `PATH`; set `YT_DLP_PATH=/absolute/path/to/yt-dlp` when it is not. `BUN_PATH` can likewise point to a specific Bun executable. The integration intentionally allows Bun 1.4+ despite the older-version support warning in the ejs README.
+
+`bun run dev` exposes the same YouTube endpoint through the Vite development server, so the source works in both development and the built Bun server.
+
+The GitHub Pages deployment remains static, so local-file separation works there but YouTube importing requires the Bun server (or an equivalent deployment of `/api/youtube-audio`). Only download media you have permission to use.
+
 The `export` command writes `public/models/htdemucs.onnx` and automatically corrects PyTorch's `ScatterND` index type for ONNX Runtime Web.
