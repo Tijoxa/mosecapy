@@ -21,8 +21,8 @@ type SourceMode = "local" | "youtube";
 
 const MAX_FILE_SIZE = 250 * 1024 * 1024;
 const SAMPLE_RATE = 44_100;
-const YT_DLP_INSTALL_ERROR = "yt-dlp is not installed or YT_DLP_PATH is not configured.";
-const YT_DLP_REPOSITORY_URL = "https://github.com/yt-dlp/yt-dlp";
+const YOUTUBE_SETUP_URL = "https://github.com/Tijoxa/mosecapy#youtube-audio-input";
+const YOUTUBE_AUDIO_API_URL = "http://127.0.0.1:8765/api/youtube-audio";
 const ACCEPTED_TYPES = ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/flac", "audio/ogg"];
 const STEM_COLORS = ["#f15b35", "#8f75e8", "#2b8f73", "#d08c22"];
 const ALL_STEM_INDICES = STEMS.map((_, index) => index);
@@ -203,24 +203,30 @@ function App() {
     setMessage("Importing audio from YouTube…");
 
     try {
-      const response = await fetch("/api/youtube-audio", {
+      const request: RequestInit & { targetAddressSpace: "loopback" } = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: sourceUrl }),
-      });
+        targetAddressSpace: "loopback",
+        redirect: "error",
+      };
+      const response = await fetch(YOUTUBE_AUDIO_API_URL, request);
       if (!response.ok) {
-        const body = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(body?.error || "YouTube audio could not be imported.");
+        const body = await response.json().catch(() => null) as { detail?: unknown } | null;
+        throw new Error(typeof body?.detail === "string" ? body.detail : "YouTube audio could not be imported.");
       }
 
       const blob = await response.blob();
+      if (blob.type !== "audio/mpeg" || !blob.size) throw new Error("The local service did not return an MP3.");
       const encodedFilename = response.headers.get("X-Track-Filename");
       const filename = encodedFilename ? decodeURIComponent(encodedFilename) : "youtube-audio.mp3";
-      const importedFile = new File([blob], filename, { type: response.headers.get("Content-Type") || "audio/mpeg" });
+      const importedFile = new File([blob], filename, { type: blob.type });
       await cacheYouTubeAudio(importedFile, sourceUrl).catch(() => undefined);
       chooseFile(importedFile, "youtube");
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "YouTube audio could not be imported.";
+      const errorMessage = error instanceof TypeError
+        ? "Could not reach the local service. Start mosecapy-youtube and allow local access if prompted."
+        : error instanceof Error ? error.message : "YouTube audio could not be imported.";
       setYoutubeError(errorMessage);
       setMessage("Choose a track to begin");
     } finally {
@@ -590,7 +596,7 @@ function App() {
                   <strong>{file ? file.name : "Import from YouTube"}</strong>
                   <span>{file
                     ? `${(file.size / 1024 / 1024).toFixed(1)} MB · ready to separate`
-                    : "Audio is converted to MP3, then processed locally"}</span>
+                    : "Uses yt-dlp on this computer"}</span>
                 </div>
               </div>
               <form onSubmit={(event) => {
@@ -614,14 +620,8 @@ function App() {
                   </button>
                 </div>
                 <p className={`youtube-feedback ${youtubeError ? "error" : ""}`} role={youtubeError ? "alert" : undefined} aria-live="polite">
-                  {youtubeError === YT_DLP_INSTALL_ERROR ? (
-                    <>
-                      {youtubeError}{' '}
-                      <a href={YT_DLP_REPOSITORY_URL} target="_blank" rel="noreferrer">
-                        Install here.
-                      </a>
-                    </>
-                  ) : youtubeError}
+                  {youtubeError && `${youtubeError} `}
+                  <a href={YOUTUBE_SETUP_URL} target="_blank" rel="noreferrer">Local service setup</a>
                 </p>
               </form>
             </div>

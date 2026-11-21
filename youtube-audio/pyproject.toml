@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mosecapy-youtube"
+version = "0.1.0"
+description = "Local YouTube audio service for Mosecapy Studio"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.121", "uvicorn>=0.34"]
+
+[project.scripts]
+mosecapy-youtube = "mosecapy_youtube:main"

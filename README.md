@@ -33,22 +33,30 @@ Create a production build with `bun run build`. The static output is written to 
 
 ### YouTube audio input
 
-The source chooser also accepts YouTube URLs. That route uses `yt-dlp` with the
-[`yt-dlp/ejs`](https://github.com/yt-dlp/ejs) challenge solver (`ejs:npm`) and Bun as its JavaScript runtime, then gives the converted MP3 to the same browser-based separation flow.
-
-Install current `yt-dlp` and `ffmpeg`, build the frontend, and run the Bun server:
+The GitHub Pages app calls a FastAPI service on your computer to download YouTube
+audio. The service runs `yt-dlp` and sends the MP3 back to your browser for separation.
+Install [FFmpeg](https://ffmpeg.org/download.html) and make sure `ffmpeg` and
+`ffprobe` are on `PATH`. Deno runs the JavaScript code used by `yt-dlp` for YouTube.
 
 ```bash
-cd frontend
-bun install
-bun run build
-bun run start
+uv tool install deno
+uv tool install "yt-dlp[default]"
+uv tool install "git+https://github.com/Tijoxa/mosecapy.git#subdirectory=youtube-audio"
+mosecapy-youtube
 ```
 
-`yt-dlp` must be on `PATH`; set `YT_DLP_PATH=/absolute/path/to/yt-dlp` when it is not. `BUN_PATH` can likewise point to a specific Bun executable. The integration intentionally allows Bun 1.4+ despite the older-version support warning in the ejs README.
+Keep `mosecapy-youtube` running, open [Mosecapy Studio](https://tijoxa.github.io/mosecapy/),
+and choose **YouTube audio**. Allow local access if the browser prompts you.
+The service listens on `127.0.0.1:8765`. Open `http://127.0.0.1:8765/health`
+to check that it is running. If your shell cannot find the installed commands,
+run `uv tool update-shell` and reopen your terminal.
 
-`bun run dev` exposes the same YouTube endpoint through the Vite development server, so the source works in both development and the built Bun server.
+From a repository checkout, install the current local code with
+`uv tool install ./youtube-audio`. `bun run dev` and `bun run preview` use the
+same service from their default local URLs.
 
-The GitHub Pages deployment remains static, so YouTube importing requires the Bun server (or an equivalent deployment of `/api/youtube-audio`). The YouTube source is hidden on mobile layouts; mobile users can select local audio files. Only download media you have permission to use.
+Use `uv tool upgrade yt-dlp` to refresh the downloader and its bundled YouTube
+challenge solver. The YouTube tab appears on desktop layouts. Local file import
+works in the browser on desktop and mobile. Only download media you have permission to use.
 
 The `export` command writes `public/models/htdemucs.onnx` and automatically corrects PyTorch's `ScatterND` index type for ONNX Runtime Web.

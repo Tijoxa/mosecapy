@@ -6,9 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "start": "bun server.ts",
-    "test": "bun test"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@audio/encode-ogg": "1.2.2",
