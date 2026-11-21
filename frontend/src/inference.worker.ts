@@ -19,7 +19,6 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
 
   try {
     if (event.data.type === "load-model") {
-      post({ type: "model-loading" });
       const model = await getSession(event.data.modelUrl);
       post({ type: "model-ready", backend: activeBackend, source: model.source, cached: model.cached });
       return;
@@ -45,6 +44,7 @@ async function getSession(modelUrl: string): Promise<{ source: ModelSource; cach
     : 1;
   ort.env.wasm.simd = true;
   const model = await loadModelBytes(modelUrl);
+  post({ type: "model-initializing" });
 
   const hasWebGpu = "gpu" in self.navigator;
   if (hasWebGpu) {
@@ -105,8 +105,39 @@ async function loadModelBytes(modelUrl: string): Promise<{
         return false;
       })
     : Promise.resolve(false);
-  const [buffer, cached] = await Promise.all([response.arrayBuffer(), cacheWrite]);
+  const [buffer, cached] = await Promise.all([readModelDownload(response), cacheWrite]);
   return { bytes: new Uint8Array(buffer), source: "network", cached };
+}
+
+async function readModelDownload(response: Response): Promise<ArrayBuffer> {
+  if (!response.body) return response.arrayBuffer();
+
+  const contentLength = Number(response.headers.get("Content-Length"));
+  let total = Number.isSafeInteger(contentLength) && contentLength > 0 ? contentLength : null;
+  let received = 0;
+  let updateTimer: number | undefined;
+  function reportProgress() {
+    updateTimer = undefined;
+    post({ type: "model-download-progress", received, total });
+  }
+  reportProgress();
+
+  const stream = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      received += chunk.byteLength;
+      if (total !== null && received > total) total = null;
+
+      updateTimer ??= self.setTimeout(reportProgress, 100);
+      controller.enqueue(chunk);
+    },
+  }));
+  try {
+    const buffer = await new Response(stream).arrayBuffer();
+    if (received > 0) post({ type: "model-download-progress", received, total: received });
+    return buffer;
+  } finally {
+    self.clearTimeout(updateTimer);
+  }
 }
 
 async function deleteCachedModel(modelUrl: string): Promise<void> {

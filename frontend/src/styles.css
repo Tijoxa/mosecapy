@@ -99,9 +99,25 @@ main { overflow: hidden; }
 .model-button.ready:disabled { color: #2b8f73; border-color: #2b8f73; opacity: 1; }
 .separate-button { background: var(--orange); color: white; box-shadow: 5px 5px 0 var(--ink); }
 .separate-button:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--ink); }
-.model-status { color: #73726c; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 10px; margin-left: 8px; }
+.model-status { display: flex; align-items: center; gap: 10px; color: #73726c; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 10px; margin-left: 8px; }
 .model-status.ready { color: #2b8f73; }
 .model-status.error { color: #b52f23; }
+.model-download-ring {
+  display: grid;
+  flex: 0 0 48px;
+  height: 48px;
+  padding: 4px;
+  border-radius: 50%;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+.model-download-ring span { display: grid; place-items: center; border-radius: 50%; background: var(--paper); }
+.model-download-size { margin-top: 4px; }
+@media (prefers-reduced-motion: no-preference) {
+  .model-download-ring:not([aria-valuenow]) { animation: model-download-spin 1s linear infinite; }
+}
+@keyframes model-download-spin { to { transform: rotate(360deg); } }
 
 .progress-panel { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 24px; }
 .progress-heading, .progress-meta { display: flex; justify-content: space-between; gap: 18px; }

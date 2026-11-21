@@ -55,6 +55,7 @@ function App() {
   const [modelState, setModelState] = useState<ModelState>("idle");
   const [modelCached, setModelCached] = useState(false);
   const [modelMessage, setModelMessage] = useState("Download the model once to enable separation");
+  const [modelDownload, setModelDownload] = useState<Extract<WorkerResponse, { type: "model-download-progress" }> | null>(null);
   const [message, setMessage] = useState("Choose a track to begin");
   const [isDragging, setIsDragging] = useState(false);
   const [selectedStemIndices, setSelectedStemIndices] = useState<number[]>(ALL_STEM_INDICES);
@@ -98,7 +99,6 @@ function App() {
         const cached = Boolean(await cache.match(MODEL_URL));
         if (!mounted) return;
         setModelCached(cached);
-        if (cached) setModelMessage("Saved model available on this device");
       } catch {
         // The normal download path still works when Cache Storage is unavailable.
       }
@@ -159,7 +159,8 @@ function App() {
     if (modelState === "loading" || modelState === "ready") return;
     if (phase === "error") setPhase("idle");
     setModelState("loading");
-    setModelMessage(modelCached ? "Loading the saved model…" : "Downloading and saving HTDemucs…");
+    setModelDownload(null);
+    setModelMessage(modelCached ? "Loading the saved model…" : "Connecting to the model server…");
     void navigator.storage?.persist?.().catch(() => false);
     getWorker().postMessage({ type: "load-model", modelUrl: MODEL_URL } satisfies WorkerRequest);
   }
@@ -257,8 +258,13 @@ function App() {
   }
 
   function handleWorkerMessage(response: WorkerResponse) {
-    if (response.type === "model-loading") {
-      setModelState("loading");
+    if (response.type === "model-download-progress") {
+      setModelDownload(response);
+      return;
+    }
+    if (response.type === "model-initializing") {
+      setModelDownload(null);
+      setModelMessage("Initializing HTDemucs…");
       return;
     }
     if (response.type === "model-ready") {
@@ -516,6 +522,16 @@ function App() {
 
   const isBusy = ["decoding", "separating"].includes(phase);
   const canSeparate = Boolean(file) && modelState === "ready" && !isBusy && !isExporting;
+  const activeModelDownload = modelState === "loading" ? modelDownload : null;
+  const modelDownloadPercent = activeModelDownload?.total
+    ? Math.floor((activeModelDownload.received / activeModelDownload.total) * 100)
+    : undefined;
+  const downloadedSize = activeModelDownload?.total === null
+    ? `${(activeModelDownload.received / 1_000_000).toFixed(1)} MB downloaded`
+    : undefined;
+  const modelStatus = activeModelDownload
+    ? "Downloading HTDemucs…"
+    : modelState === "idle" && modelCached ? "Saved model available on this device" : modelMessage;
 
   return (
     <main>
@@ -636,18 +652,35 @@ function App() {
           >
             <span aria-hidden="true">↓</span>
             {modelState === "loading"
-              ? "Downloading model…"
+              ? activeModelDownload ? "Downloading model…" : "Loading model…"
               : modelState === "ready"
                 ? "Model ready"
                 : modelState === "error"
                   ? "Retry model download"
-                  : modelCached ? "Load cached model" : "Download model · 163 MB"}
+                  : modelCached ? "Load cached model" : "Download model · 171 MB"}
           </button>
           <button className="separate-button" type="button" onClick={startSeparation} disabled={!canSeparate}>
             <span aria-hidden="true">✦</span>
             {isBusy ? "Separating…" : phase === "complete" ? "Separate again" : "Separate track"}
           </button>
-          <span className={`model-status ${modelState}`} aria-live="polite">{modelMessage}</span>
+          <div className={`model-status ${modelState}`}>
+            {activeModelDownload && (
+              <div
+                className="model-download-ring"
+                role="progressbar"
+                aria-label="Model download"
+                aria-valuenow={modelDownloadPercent}
+                aria-valuetext={downloadedSize}
+                style={{ background: `conic-gradient(var(--orange) ${modelDownloadPercent ?? 25}%, var(--line) 0)` }}
+              >
+                <span aria-hidden="true">{modelDownloadPercent !== undefined && `${modelDownloadPercent}%`}</span>
+              </div>
+            )}
+            <div>
+              <div role="status">{modelStatus}</div>
+              {downloadedSize && <div className="model-download-size" aria-hidden="true">{downloadedSize}</div>}
+            </div>
+          </div>
         </div>
 
         {(isBusy || phase === "complete" || phase === "error") && (

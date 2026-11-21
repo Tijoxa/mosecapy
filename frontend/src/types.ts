@@ -9,7 +9,8 @@ export type WorkerRequest =
   | { type: "separate"; left: Float32Array; right: Float32Array };
 
 export type WorkerResponse =
-  | { type: "model-loading" }
+  | { type: "model-download-progress"; received: number; total: number | null }
+  | { type: "model-initializing" }
   | { type: "model-ready"; backend: WorkerBackend; source: ModelSource; cached: boolean }
   | { type: "progress"; completed: number; total: number }
   | {
